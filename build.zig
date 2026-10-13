@@ -40,7 +40,6 @@ pub fn build(b: *std.Build) void {
         if (b.args) |args|
             run.addArgs(args);
 
-        b.installArtifact(exe);
         b.step("parse", "Parse a .bfbs schema into ZON IR").dependOn(&run.step);
     }
 
@@ -65,7 +64,6 @@ pub fn build(b: *std.Build) void {
         if (b.args) |args|
             run.addArgs(args);
 
-        b.installArtifact(exe);
         b.step("generate", "Generate a decoder library for the ZON schema").dependOn(&run.step);
     }
 

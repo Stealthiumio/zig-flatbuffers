@@ -83,7 +83,6 @@ pub const Parser = struct {
 
                 for (options, 1..) |*option, j| {
                     const enum_val = enum_values.get(j);
-                    const enum_val_name = enum_val.name();
                     const value = enum_val.value();
                     if (value != @as(i64, @intCast(j)))
                         return error.InvalidUnion;
@@ -96,8 +95,13 @@ pub const Parser = struct {
                     const object = try self.getObject(t.index());
                     if (object.is_struct())
                         return error.InvalidUnion;
-                    if (!std.mem.eql(u8, enum_val_name, pop(object.name())))
-                        return error.InvalidUnion;
+
+                    // Aliases (`alias: Table`) are dropped and the variant takes the table's name: the
+                    // wire only carries the tag value, which is unchanged. A table listed twice needs
+                    // its aliases to stay distinct, so that is still rejected.
+                    for (options[0 .. j - 1]) |previous|
+                        if (std.mem.eql(u8, previous.table.name, object.name()))
+                            return error.InvalidUnion;
 
                     option.* = .{ .table = .{ .name = try copyName(arena_allocator, object.name()) } };
                     if (enum_val.documentation()) |documentation|
@@ -114,8 +118,13 @@ pub const Parser = struct {
 
                 try self.union_list.append(self.allocator, union_t);
             } else if (hasBitFlags(enum_ref)) {
+                // Bit flags are raw bits, so a signed base type decodes the same as its unsigned
+                // counterpart. A flag on the sign bit is still rejected below (negative value).
                 const backing_integer: types.Integer = switch (base_type) {
-                    .UByte, .UShort, .UInt, .ULong => try getInteger(base_type),
+                    .Byte, .UByte => .u8,
+                    .Short, .UShort => .u16,
+                    .Int, .UInt => .u32,
+                    .Long, .ULong => .u64,
                     else => return error.InvalidBitFlags,
                 };
 
